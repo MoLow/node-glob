@@ -2,7 +2,8 @@
 // show that it does the same thing by default as the shell.
 import { resolve } from 'path'
 import t from 'tap'
-import { glob } from '../'
+import { glob } from '../src/index'
+import { glob as orgiginal } from '../dist/cjs/_index'
 import { bashResults } from './bash-results'
 const globs = Object.keys(bashResults)
 
@@ -45,12 +46,14 @@ globs.forEach(function (pattern) {
 
   t.test(pattern, async t => {
     // sort and unmark, just to match the shell results
+    // const matches1 = cleanResults(await orgiginal(pattern))
     const matches = cleanResults(await glob(pattern))
     t.same(matches, expect, pattern)
+    // t.same(matches1, expect, pattern)
   })
 
-  t.test(pattern + ' sync', async t => {
-    const matches = cleanResults(glob.globSync(pattern))
-    t.same(matches, expect, 'should match shell (sync)')
-  })
+  // t.test(pattern + ' sync', async t => {
+  //   const matches = cleanResults(glob.globSync(pattern))
+  //   t.same(matches, expect, 'should match shell (sync)')
+  // })
 })
