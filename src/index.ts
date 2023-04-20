@@ -1,7 +1,7 @@
 import { lstatSync, readdirSync } from 'fs'
 import { join, basename, relative, isAbsolute } from 'path'
 import { Minimatch, GLOBSTAR, escape, unescape } from 'minimatch'
-import { hasMagic } from './has-magic'
+import { hasMagic } from './has-magic.js'
 
 const lazyMinimatch = () => ({ Minimatch, GLOBSTAR });
 const ArrayPrototypeShift = (arr: Array<any>) => arr.shift();

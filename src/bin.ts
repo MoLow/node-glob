@@ -224,7 +224,7 @@ try {
     ? positionals
     : positionals.filter(p => !existsSync(p))
   const matches = values.all ? [] : positionals.filter(p => existsSync(p))
-  const stream = globStream(patterns, {
+  const stream = globStream(patterns as any, {
     absolute: values.absolute,
     cwd: values.cwd,
     dot: values.dot,

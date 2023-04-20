@@ -3,7 +3,6 @@
 import { resolve } from 'path'
 import t from 'tap'
 import { glob } from '../src/index'
-import { glob as orgiginal } from '../dist/cjs/_index'
 import { bashResults } from './bash-results'
 const globs = Object.keys(bashResults)
 
