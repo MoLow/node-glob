@@ -8,7 +8,7 @@ const origCwd = process.cwd()
 process.chdir(__dirname + '/fixtures')
 t.teardown(() => process.chdir(origCwd))
 
-t.test('changing cwd and searching for **/d', { skip: "not implemented"}, t => {
+t.test('changing cwd and searching for **/d', t => {
   const expect = Object.entries({
     a: new Set(j(['c/d', 'b/c/d'])),
     'a/b': new Set(j(['c/d'])),

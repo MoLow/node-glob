@@ -1,134 +1,354 @@
-import { lstatSync, readdirSync } from 'fs'
-import { join, basename, relative, isAbsolute } from 'path'
+import { Dirent, Stats, lstat, lstatSync, readdirSync } from 'fs'
+import { join, relative, isAbsolute, resolve } from 'path'
 import { Minimatch, GLOBSTAR, escape, unescape } from 'minimatch'
 import { hasMagic } from './has-magic.js'
 
-const lazyMinimatch = () => ({ Minimatch, GLOBSTAR });
-const ArrayPrototypeShift = (arr: Array<any>) => arr.shift();
-const ArrayPrototypePush = (arr: Array<any>, ...items: any[]) => arr.push(...items);
+const lazyMinimatch = () => ({ Minimatch, GLOBSTAR } as const);
+const ArrayPrototypePop = <T>(arr: Array<T>) => arr.pop();
+const ArrayPrototypePush = <T>(arr: Array<T>, ...items: T[]) => arr.push(...items);
+const ArrayPrototypeMap = <T, U>(arr: Array<T>, cb: (item: T, index: number) => U) => arr.map(cb);
+const ArrayPrototypeFlatMap = <T, U>(arr: Array<T>, cb: (item: T) => U[]) => arr.flatMap(cb);
 const SafeSet = Set;
+const SafeMap = Map;
 
+const kEmptyObject = {};
+const validateObject = (...args: any[]) => {};
+const validateFunction = (...args: any[]) => {};
+const isRegExp = (val: any) => val instanceof RegExp;
 
-
-function stats(path: string, silent = true) {
-  try {
-    return lstatSync(path);
-  } catch (err: any) {
-    // if (silent) {
-      return null;
-    // }
-    // if (err?.code === 'ENOENT') {
-    //   console.error(`Could not find '${path}'`);
-    //   process.exit(1);
-    // }
-    throw err;
-  }
-}
-
-function readdir(path: string) {
-  try {
-    return readdirSync(path);
-  } catch (err: any) {
-   return [];
-  }
-}
 
 type Pattern = string | RegExp | typeof GLOBSTAR;
 
+class Cache {
+  #cache = new SafeMap();
+  #statsCache = new SafeMap();
+  #readdirCache = new SafeMap();
+
+  statSync(path: string) {
+    if (this.#statsCache.has(path)) {
+      return this.#statsCache.get(path);
+    }
+    let val;
+    try {
+      val = lstatSync(path);
+    } catch {
+      val = null;
+    }
+    this.#statsCache.set(path, val);
+    return val;
+  }
+  addToStatCache(path: string, val: Dirent) {
+    this.#statsCache.set(path, val);
+  }
+  readdirSync(path: string) {
+    if (this.#readdirCache.has(path)) {
+      return this.#readdirCache.get(path);
+    }
+    let val: Dirent[];
+    try {
+      val = readdirSync(path, { __proto__: null, withFileTypes: true } as { withFileTypes: true });
+    } catch {
+      val = [];
+    }
+    this.#readdirCache.set(path, val);
+    return val;
+  }
+  #cacheKey(keys: string[], index: number) {
+    let key = '';
+    for (let i = index; i < keys.length; i++) {
+      key += keys[i];
+      if (i !== keys.length - 1) {
+        key += '/';
+      }
+    }
+    return key;
+  }
+  add(path: string, keys: string[], indexes: Set<number>) {
+    let cache: Set<string>;
+    if (this.#cache.has(path)) {
+      cache = this.#cache.get(path);
+    } else {
+      cache = new SafeSet();
+      this.#cache.set(path, cache);
+    }
+    indexes.forEach(index => cache?.add(this.#cacheKey(keys, index)));
+  }
+  seen(path: string, keys: string[], index: number) {
+    return this.#cache.get(path)?.has(this.#cacheKey(keys, index));
+  }
+
+}
+
 function testPattern(pattern: Pattern, path: string) {
-  if (pattern === GLOBSTAR) {
+  if (pattern === lazyMinimatch().GLOBSTAR) {
     return true;
   }
   if (typeof pattern === 'string') {
-    return true;
+    return pattern === path;
   }
   if (typeof pattern.test === 'function') {
     return pattern.test(path);
   }
+  return false;
 }
 
-function shouldAddResult(pattern: Pattern[], index: number, path: string) {
-  const isLast = pattern.length === index || (pattern.length === index + 1 && pattern[index] === '');
-  const matches = testPattern(pattern[index - 1], basename(path));
-  return isLast && matches;
-}
+function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
+  validateObject(options, 'options');
+  const root = options.cwd ?? '.';
+  const { exclude } = options;
+  if (exclude != null) {
+    validateFunction(exclude, 'options.exclude');
+  }
 
-export function walkTree(root: string, patterns: string[]) {
-  const results = new SafeSet<string>();
   const { Minimatch, GLOBSTAR } = lazyMinimatch();
-  const queue = patterns.flatMap((pattern) => new Minimatch(pattern).set.map((pattern) => ({ pattern, index: 0, path: root })));
-  // TODO: Deduplicate patterns
+  const results = new SafeSet<string>();
+  const matchers = ArrayPrototypeMap(patterns, (pattern) => new Minimatch(pattern));
+  const queue = ArrayPrototypeFlatMap(matchers, (matcher) => {
+    return ArrayPrototypeMap(matcher.set,
+                             (pattern, i) => ({ __proto__: null, pattern, keys: matcher.globParts[i], indexes: new SafeSet([0]), symlinks: new SafeSet<number>([]), path: '.' }));
+  });
+  const cache = new Cache();
+  while (queue.length > 0) {
+    const { pattern, indexes, keys, symlinks, path } = ArrayPrototypePop(queue)!;
+
+    // console.log({
+    //   path, 
+    //   // patterns: [...indexes].map((i) => pattern.slice(i).map((x:any) => x===GLOBSTAR ? '**' : x._glob || x).join('/')),
+    //   // r: results.size,
+    // });
+    
+    cache.add(path, keys, indexes);
+    const last = pattern.length - 1;
+    const fullpath = resolve(root, path);
+    const stat = cache.statSync(fullpath);
+    const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && Array.from(indexes).some((i) => !symlinks.has(i)));
+    const isLast = indexes.has(last) || (pattern[last] === '' && isDirectory && indexes.has(last - 1) && pattern[last - 1] === GLOBSTAR);
+
+    if (indexes.has(0) && pattern[0] === "") {
+      // Absolute path
+      ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks , path: '/' });
+      continue;
+    }
+    if (indexes.has(0) && pattern[0] === "..") {
+      // Start with ..
+      ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks, path: relative(root, resolve(fullpath, "..")) });
+      continue;
+    }
+    if (indexes.has(0) && pattern[0] === ".") {
+      ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks, path });
+      continue;
+    }
+
+    if (isLast && typeof pattern[last] === 'string') {
+      const path = resolve(fullpath, pattern[last] as string);
+      const stat = cache.statSync(path);
+      if (stat && (pattern[last] || stat.isDirectory() || stat.isSymbolicLink())) {
+        results.add(relative(root, resolve(fullpath, pattern[last] as string)) || ".");
+      }
+    } else if (isLast && pattern[last] === GLOBSTAR && (path !== "." || pattern[0] === ".")) {
+      results.add(path);
+    }
+
+    const children = isDirectory ? cache.readdirSync(fullpath) : [];
+    for (let i = 0; i < children.length; i++) {
+      const entry = children[i];
+      if (entry.name[0] === '.' || (exclude && exclude(entry.name))) {
+        continue;
+      }
+      const entryPath = join(path, entry.name);
+      cache.addToStatCache(entryPath, entry);
+      
+      const subPatterns = new SafeSet<number>();
+      const nSymlinks = new SafeSet();
+      indexes.forEach(function forEachIndex(index) {
+        if (cache.seen(entryPath, keys, index) || cache.seen(entryPath, keys, index + 1)) {
+          return;
+        }
+        const current = pattern[index];
+        const nextIndex = index + 1;
+        const next = pattern[nextIndex];
+        const fromSymlink = symlinks.has(index);
+        if (current === GLOBSTAR) {
+          if (!fromSymlink && entry.isDirectory()) {
+            subPatterns.add(index);
+          } else if (!fromSymlink && index === last) {
+            results.add(entryPath);
+          }
+          if (entry.isSymbolicLink()) {
+            nSymlinks.add(index);
+          }
+          const nextMatches = next != null && testPattern(next, entry.name);
+          if (nextMatches && nextIndex === last) {
+            results.add(entryPath);
+          } else if (nextMatches) {
+            subPatterns.add(index + 2);
+          }
+          if ((nextMatches || pattern[0] === ".") && (entry.isDirectory() || entry.isSymbolicLink()) && !fromSymlink) {
+            subPatterns.add(nextIndex);
+          }
+          if (next === "") {
+            results.add(path);
+          } else if (next === ".." && entry.isDirectory()) {
+            const parent = join(path, "..");
+            if (nextIndex < last) {
+              if (!cache.seen(path, keys, nextIndex + 1)) {
+                ArrayPrototypePush(queue, { __proto__: null, pattern, keys, indexes: new SafeSet([nextIndex + 1]), symlinks, path });
+              }
+              if (!cache.seen(parent, keys, nextIndex + 1)) {
+                ArrayPrototypePush(queue, { __proto__: null, pattern, keys, indexes: new SafeSet([nextIndex + 1]), symlinks, path: parent });
+              }
+            } else {
+              results.add(join(path, ".."));
+              results.add(path);
+            }
+          }
+        }
+        if (typeof current === "string") {
+          if (testPattern(current, entry.name)) {
+            subPatterns.add(nextIndex);
+          } else if (current === "." && testPattern(next, entry.name)) {
+            if (nextIndex === last) {
+              results.add(entryPath);
+            } else {
+              subPatterns.add(nextIndex + 1);
+            }
+            if (next === GLOBSTAR) {
+              indexes.add(nextIndex);
+            }
+          }
+        }
+        if (isRegExp(current) && testPattern(current, entry.name)) {
+          if (index === last) {
+            results.add(entryPath);
+          } else if (entry.isDirectory()) {
+            subPatterns.add(nextIndex);
+          }
+        }
+      });
+      if (subPatterns.size > 0) {
+        ArrayPrototypePush(queue, { __proto__: null, pattern, indexes: subPatterns, keys, symlinks: nSymlinks, path: entryPath});
+      }
+    }
+  }
+
+  return {
+    __proto__: null,
+    results,
+    matchers,
+  };
+}
+
+function globSyncImpl_(patterns: string[], options: any = kEmptyObject) {
+  validateObject(options, 'options');
+  const root = options.cwd ?? '.';
+  const { exclude } = options;
+  if (exclude != null) {
+    validateFunction(exclude, 'options.exclude');
+  }
+
+  const { Minimatch, GLOBSTAR } = lazyMinimatch();
+  const results = new SafeSet<string>();
+  const matchers = ArrayPrototypeMap(patterns, (pattern) => new Minimatch(pattern));
+  const queue = ArrayPrototypeFlatMap(matchers, (matcher) => {
+    return ArrayPrototypeMap(matcher.set,
+                             (pattern) => ({ __proto__: null, pattern, index: 0, path: '.', followSymlinks: true }));
+  });
+  const cache = new Cache();
 
   while (queue.length > 0) {
-    const { pattern, index: currentIndex, path, followSymlinks } = ArrayPrototypeShift(queue);
+    const { pattern, index: currentIndex, path, followSymlinks } = ArrayPrototypePop(queue)!;
+    // if (cache.seen_(pattern, currentIndex, path)) {
+    //   continue;
+    // }
+    // cache.add_(pattern, currentIndex, path);
+
     const currentPattern = pattern[currentIndex];
     const index = currentIndex + 1;
-    // console.log({ pattern, currentPattern, path })
+    const isLast = pattern.length === index || (pattern.length === index + 1 && pattern[index] === '');
 
     if (currentPattern === '') {
       // Absolute path
-      ArrayPrototypePush(queue, { pattern, index, path: '/', followSymlinks });
+      ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: '/', followSymlinks });
       continue;
     }
 
     if (typeof currentPattern === 'string') {
       const entryPath = join(path, currentPattern);
-      if (shouldAddResult(pattern, index, entryPath) && stats(entryPath)) {
+      if (isLast && cache.statSync(resolve(root, entryPath))) {
+        // last path
         results.add(entryPath);
-      } else {
-        ArrayPrototypePush(queue, { pattern, index, path: entryPath, followSymlinks });
+      } else if (!isLast) {
+        // Keep traversing, we only check file existence for the last path
+        ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
       }
+      continue;
     }
 
-    const stat = stats(path);
-    const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && followSymlinks !== false);
-    if (currentPattern instanceof RegExp && isDirectory) {
-      const entries = readdir(path);
+    const fullpath = resolve(root, path);
+    const stat = cache.statSync(fullpath);
+    const isDirectory = stat?.isDirectory() || (followSymlinks !== false && stat?.isSymbolicLink());
+
+    if (isDirectory && isRegExp(currentPattern)) {
+      const entries = cache.readdirSync(fullpath);
       for (const entry of entries) {
-        const entryPath = join(path, entry);
-        const matches = testPattern(currentPattern, entry);
-        if (matches && pattern.length === index) {
+        const entryPath = join(path, entry.name);
+        // if (cache.seen_(pattern, index, entryPath)) {
+        //   continue;
+        // }
+        const matches = testPattern(currentPattern, entry.name);
+        if (matches && isLast) {
           results.add(entryPath);
         } else if (matches) {
-          ArrayPrototypePush(queue, { pattern, index, path: entryPath, followSymlinks });
+          ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
         }
       }
     }
 
-    if (currentPattern === GLOBSTAR && isDirectory) {
-      const entries = readdir(path);
+    if (isDirectory && currentPattern === GLOBSTAR) {
+      const entries = cache.readdirSync(fullpath);
       for (const entry of entries) {
-        if (entry === 'node_modules' || entry.startsWith(".")) {
+        if (entry.name[0] === '.' || (exclude && exclude(entry.name))) {
           continue;
         }
-        const entryPath = join(path, entry);
-        const isSymbolicLink = stats(entryPath)?.isSymbolicLink();
-        // push child directory to queue at same pattern index
-        ArrayPrototypePush(queue, { pattern, index: currentIndex, path: entryPath, followSymlinks: !isSymbolicLink });
+        const entryPath = join(path, entry.name);
+        // if (cache.seen_(pattern, index, entryPath)) {
+        //   continue;
+        // }
+        const isSymbolicLink = entry.isSymbolicLink();
+        const isDirectory = entry.isDirectory();
+        if (isDirectory) {
+          // Push child directory to queue at same pattern index
+          ArrayPrototypePush(queue, {
+            __proto__: null, pattern, index: currentIndex, path: entryPath, followSymlinks: !isSymbolicLink,
+          });
+        }
 
         if (pattern.length === index || (isSymbolicLink && pattern.length === index + 1 && pattern[index] === '')) {
           results.add(entryPath);
-        }  else if (pattern[index] === '..') {
+        } else if (pattern[index] === '..') {
           continue;
-        } else if (!isSymbolicLink || (typeof pattern[index] !== "string") || pattern[0] !== GLOBSTAR) {
-          ArrayPrototypePush(queue, { pattern, index, path: entryPath, followSymlinks });
-        } 
+        } else if (!isLast &&
+          (isDirectory || (isSymbolicLink && (typeof pattern[index] !== 'string' || pattern[0] !== GLOBSTAR)))) {
+          ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
+        }
       }
-      if (shouldAddResult(pattern, index, path)) {
+      if (isLast) {
         results.add(path);
       } else {
-        ArrayPrototypePush(queue, { pattern, index, path, followSymlinks });
+        ArrayPrototypePush(queue, { __proto__: null, pattern, index, path, followSymlinks });
       }
     }
   }
 
-  return results;
+  return {
+    __proto__: null,
+    results,
+    matchers,
+  };
 }
 
 export const glob = (pattern: string, opt?: any) => {
-  const cwd = opt?.cwd ?? './';
-  const isCwdAbsolute = isAbsolute(cwd);
-  return Array.from(walkTree(cwd, [pattern])).map((path) => (isAbsolute(path) && !isCwdAbsolute ? path : relative(cwd, path)) || ".");
+  return Array.from(globSyncImpl([pattern], opt).results);
 }
 
 // just stuff to makes tests pass

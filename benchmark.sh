@@ -55,39 +55,32 @@ for p in "${patterns[@]}"; do
 
   echo '~~ sync ~~'
 
-#  echo -n $'node current globSync cjs    \t'
-#  cat > "$wd/bench-working-dir/sync.cjs" <<CJS
-#  const {globSync} = require("$wd/dist/cjs/index-cjs.js")
-#  console.log(globSync(process.argv[2]).length)
-#CJS
-#  t node "$wd/bench-working-dir/sync.cjs" "$p"
-#
-#  echo -n $'node current glob async cjs   \t'
-#  cat > "$wd/bench-working-dir/async.cjs" <<CJS
-#  const glob = require("$wd/dist/cjs/index-cjs.js")
-#  glob(process.argv[2]).then(files => console.log(files.length))
-#CJS
-#  t node "$wd/bench-working-dir/async.cjs" "$p"
+#   echo -n $'node glob v8 sync             \t'
+#   cat > "$wd/bench-working-dir/glob-8-sync.cjs" <<CJS
+#     var glob=require('glob8')
+#     console.log(glob.sync(process.argv[2]).length)
+# CJS
+#   t node "$wd/bench-working-dir/glob-8-sync.cjs" "$p"
 
-  echo -n $'node glob v8 sync             \t'
-  cat > "$wd/bench-working-dir/glob-8-sync.cjs" <<CJS
-    var glob=require('glob8')
-    console.log(glob.sync(process.argv[2]).length)
-CJS
-  t node "$wd/bench-working-dir/glob-8-sync.cjs" "$p"
+#   echo -n $'node glob v8 sync             \t'
+#   cat > "$wd/bench-working-dir/glob-8-sync.cjs" <<CJS
+#     var glob=require('glob8')
+#     console.log(glob.sync(process.argv[2]).length)
+# CJS
+#   t node "$wd/bench-working-dir/glob-8-sync.cjs" "$p"
 
   echo -n $'node glob v10 sync             \t'
   cat > "$wd/bench-working-dir/glob-10-sync.cjs" <<CJS
-    var glob=require('glob10')
-    console.log(glob.sync(process.argv[2]).length)
+    const {globSync} = require("$wd/dist/cjs/src/_index.js")
+    console.log(globSync(process.argv[2]).length)
 CJS
   t node "$wd/bench-working-dir/glob-10-sync.cjs" "$p"
 
-  echo -n $'node current globSync mjs    \t'
-  cat > "$wd/bench-working-dir/sync.mjs" <<MJS
-  import {globSync} from '$wd/dist/mjs/index.js'
+  echo -n $'node current globSync cjs    \t'
+  cat > "$wd/bench-working-dir/sync.cjs" <<MJS
+  const {globSync} = require("$wd/dist/cjs/src/index.js")
   console.log(globSync(process.argv[2]).length)
 MJS
-  t node "$wd/bench-working-dir/sync.mjs" "$p"
+  t node "$wd/bench-working-dir/sync.cjs" "$p"
 
 done
