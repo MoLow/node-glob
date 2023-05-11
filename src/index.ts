@@ -189,7 +189,7 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
           if (nextMatches && nextIndex === last) {
             // if next pattern is the last one, add to results
             results.add(entryPath);
-          } else if (nextMatches) {
+          } else if (nextMatches && entry.isDirectory()) {
             // pattern mached, meaning two patterns forward
             // are also potential patterns
             // e.g **/b/c when entry is a/b - add c to potential patterns
