@@ -111,11 +111,6 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
   while (queue.length > 0) {
     const { pattern, indexes, keys, symlinks, path } = ArrayPrototypePop(queue)!;
 
-    // console.log({
-    //   path, 
-    //   // patterns: [...indexes].map((i) => pattern.slice(i).map((x:any) => x===GLOBSTAR ? '**' : x._glob || x).join('/')),
-    //   // r: results.size,
-    // });
     
     cache.add(path, keys, indexes);
     const last = pattern.length - 1;
@@ -123,33 +118,42 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
     const stat = cache.statSync(fullpath);
     const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && Array.from(indexes).some((i) => !symlinks.has(i)));
     const isLast = indexes.has(last) || (pattern[last] === '' && isDirectory && indexes.has(last - 1) && pattern[last - 1] === GLOBSTAR);
+    const isFirst = indexes.has(0);
 
-    if (indexes.has(0) && pattern[0] === "") {
-      // Absolute path
+    if (isFirst && pattern[0] === "") {
+      // Absolute path, go to root
       ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks , path: '/' });
       continue;
     }
-    if (indexes.has(0) && pattern[0] === "..") {
-      // Start with ..
+    if (isFirst && pattern[0] === "..") {
+      // Start with .., go to parent
       ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks, path: relative(root, resolve(fullpath, "..")) });
       continue;
     }
-    if (indexes.has(0) && pattern[0] === ".") {
+    if (isFirst && pattern[0] === ".") {
+      // Start with ., proceed
       ArrayPrototypePush(queue, {  __proto__: null, pattern, indexes: new SafeSet([1]), keys, symlinks, path });
       continue;
     }
 
     if (isLast && typeof pattern[last] === 'string') {
+      // Add result if it exists
       const path = resolve(fullpath, pattern[last] as string);
       const stat = cache.statSync(path);
       if (stat && (pattern[last] || stat.isDirectory() || stat.isSymbolicLink())) {
         results.add(relative(root, resolve(fullpath, pattern[last] as string)) || ".");
       }
-    } else if (isLast && pattern[last] === GLOBSTAR && (path !== "." || pattern[0] === ".")) {
+    } else if (isLast && pattern[last] === GLOBSTAR && (path !== "." || pattern[0] === "." || (pattern.length === 1 && stat))) {
+      // if pattern ends with **, add to results
+      // if path is ".", add it only if pattern starts with "." or pattern is exactly "**"
       results.add(path);
     }
 
-    const children = isDirectory ? cache.readdirSync(fullpath) : [];
+    if (!isDirectory) {
+      continue;
+    }
+    
+    const children = cache.readdirSync(fullpath);
     for (let i = 0; i < children.length; i++) {
       const entry = children[i];
       if (entry.name[0] === '.' || (exclude && exclude(entry.name))) {
@@ -161,6 +165,7 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
       const subPatterns = new SafeSet<number>();
       const nSymlinks = new SafeSet();
       indexes.forEach(function forEachIndex(index) {
+        // for each child, chek potential patterns
         if (cache.seen(entryPath, keys, index) || cache.seen(entryPath, keys, index + 1)) {
           return;
         }
@@ -168,27 +173,45 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
         const nextIndex = index + 1;
         const next = pattern[nextIndex];
         const fromSymlink = symlinks.has(index);
+
         if (current === GLOBSTAR) {
           if (!fromSymlink && entry.isDirectory()) {
-            subPatterns.add(index);
+            // if directory, add ** to its potential patterns
+            subPatterns.add(index); 
           } else if (!fromSymlink && index === last) {
+            // if ** is last, add to results
             results.add(entryPath);
           }
-          if (entry.isSymbolicLink()) {
-            nSymlinks.add(index);
-          }
+          
+          // any pattern after ** is also a potential pattern
+          // so we can already test it here
           const nextMatches = next != null && testPattern(next, entry.name);
           if (nextMatches && nextIndex === last) {
+            // if next pattern is the last one, add to results
             results.add(entryPath);
           } else if (nextMatches) {
+            // pattern mached, meaning two patterns forward
+            // are also potential patterns
+            // e.g **/b/c when entry is a/b - add c to potential patterns
             subPatterns.add(index + 2);
           }
           if ((nextMatches || pattern[0] === ".") && (entry.isDirectory() || entry.isSymbolicLink()) && !fromSymlink) {
+            // if pattern after ** matches, or pattern starts with "."
+            // and entry is a directory or symlink, add to potential patterns
             subPatterns.add(nextIndex);
           }
+
+          if (entry.isSymbolicLink()) {
+            nSymlinks.add(index);
+          }
+
           if (next === "") {
-            results.add(path);
+            // this means patten ends with "**/", add to results
+            results.add(path); 
           } else if (next === ".." && entry.isDirectory()) {
+            // in case pattern is "**/..",
+            // both parent and current directory should be added to the queue
+            // if this is the last pattern, add to results instead
             const parent = join(path, "..");
             if (nextIndex < last) {
               if (!cache.seen(path, keys, nextIndex + 1)) {
@@ -205,19 +228,25 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
         }
         if (typeof current === "string") {
           if (testPattern(current, entry.name)) {
-            subPatterns.add(nextIndex);
+            // if current pattern matches entry name
+            // the next pattern is a potential pattern
+            if (index === last) {
+              results.add(entryPath);
+            } else {
+              subPatterns.add(nextIndex);
+            }
           } else if (current === "." && testPattern(next, entry.name)) {
+            // if current pattern is ".", proceed to test next pattern
             if (nextIndex === last) {
               results.add(entryPath);
             } else {
               subPatterns.add(nextIndex + 1);
             }
-            if (next === GLOBSTAR) {
-              indexes.add(nextIndex);
-            }
           }
         }
         if (isRegExp(current) && testPattern(current, entry.name)) {
+          // if current pattern is a regex that matches entry name (e.g *.js)
+          // add next pattern to potential patterns, or to results if it's the last pattern
           if (index === last) {
             results.add(entryPath);
           } else if (entry.isDirectory()) {
@@ -226,6 +255,7 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
         }
       });
       if (subPatterns.size > 0) {
+        // if there are potential patterns, add to queue
         ArrayPrototypePush(queue, { __proto__: null, pattern, indexes: subPatterns, keys, symlinks: nSymlinks, path: entryPath});
       }
     }
