@@ -1,13 +1,15 @@
-import { Dirent, Stats, lstat, lstatSync, readdirSync } from 'fs'
-import { join, relative, isAbsolute, resolve } from 'path'
+import { Dirent, lstatSync, readdirSync } from 'fs'
+import { join, relative, resolve } from 'path'
 import { Minimatch, GLOBSTAR, escape, unescape } from 'minimatch'
 import { hasMagic } from './has-magic.js'
 
 const lazyMinimatch = () => ({ Minimatch, GLOBSTAR } as const);
+const ArrayFrom = <T>(arr: Iterable<T> | ArrayLike<T>) => Array.from(arr);
 const ArrayPrototypePop = <T>(arr: Array<T>) => arr.pop();
 const ArrayPrototypePush = <T>(arr: Array<T>, ...items: T[]) => arr.push(...items);
 const ArrayPrototypeMap = <T, U>(arr: Array<T>, cb: (item: T, index: number) => U) => arr.map(cb);
 const ArrayPrototypeFlatMap = <T, U>(arr: Array<T>, cb: (item: T) => U[]) => arr.flatMap(cb);
+const ArrayPrototypeSome = <T>(arr: Array<T>, cb: (item: T) => boolean) => arr.some(cb);
 const SafeSet = Set;
 const SafeMap = Map;
 
@@ -76,7 +78,6 @@ class Cache {
   seen(path: string, keys: string[], index: number) {
     return this.#cache.get(path)?.has(this.#cacheKey(keys, index));
   }
-
 }
 
 function testPattern(pattern: Pattern, path: string) {
@@ -105,18 +106,17 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
   const matchers = ArrayPrototypeMap(patterns, (pattern) => new Minimatch(pattern));
   const queue = ArrayPrototypeFlatMap(matchers, (matcher) => {
     return ArrayPrototypeMap(matcher.set,
-                             (pattern, i) => ({ __proto__: null, pattern, keys: matcher.globParts[i], indexes: new SafeSet([0]), symlinks: new SafeSet<number>([]), path: '.' }));
+                             (pattern, i) => ({ __proto__: null, pattern, keys: matcher.globParts[i], indexes: new SafeSet([0]), symlinks: new SafeSet<number>(), path: '.' }));
   });
   const cache = new Cache();
   while (queue.length > 0) {
     const { pattern, indexes, keys, symlinks, path } = ArrayPrototypePop(queue)!;
-
     
     cache.add(path, keys, indexes);
     const last = pattern.length - 1;
     const fullpath = resolve(root, path);
     const stat = cache.statSync(fullpath);
-    const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && Array.from(indexes).some((i) => !symlinks.has(i)));
+    const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && ArrayPrototypeSome(ArrayFrom(indexes), (i) => !symlinks.has(i)));
     const isLast = indexes.has(last) || (pattern[last] === '' && isDirectory && indexes.has(last - 1) && pattern[last - 1] === GLOBSTAR);
     const isFirst = indexes.has(0);
 
@@ -140,8 +140,8 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
       // Add result if it exists
       const path = resolve(fullpath, pattern[last] as string);
       const stat = cache.statSync(path);
-      if (stat && (pattern[last] || stat.isDirectory() || stat.isSymbolicLink())) {
-        results.add(relative(root, resolve(fullpath, pattern[last] as string)) || ".");
+      if (stat && (pattern[last] || isDirectory)) {
+        results.add(relative(root, path) || ".");
       }
     } else if (isLast && pattern[last] === GLOBSTAR && (path !== "." || pattern[0] === "." || (pattern.length === 1 && stat))) {
       // if pattern ends with **, add to results
@@ -221,7 +221,7 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
                 ArrayPrototypePush(queue, { __proto__: null, pattern, keys, indexes: new SafeSet([nextIndex + 1]), symlinks, path: parent });
               }
             } else {
-              results.add(join(path, ".."));
+              results.add(parent);
               results.add(path);
             }
           }
@@ -257,115 +257,6 @@ function globSyncImpl(patterns: string[], options: any = kEmptyObject) {
       if (subPatterns.size > 0) {
         // if there are potential patterns, add to queue
         ArrayPrototypePush(queue, { __proto__: null, pattern, indexes: subPatterns, keys, symlinks: nSymlinks, path: entryPath});
-      }
-    }
-  }
-
-  return {
-    __proto__: null,
-    results,
-    matchers,
-  };
-}
-
-function globSyncImpl_(patterns: string[], options: any = kEmptyObject) {
-  validateObject(options, 'options');
-  const root = options.cwd ?? '.';
-  const { exclude } = options;
-  if (exclude != null) {
-    validateFunction(exclude, 'options.exclude');
-  }
-
-  const { Minimatch, GLOBSTAR } = lazyMinimatch();
-  const results = new SafeSet<string>();
-  const matchers = ArrayPrototypeMap(patterns, (pattern) => new Minimatch(pattern));
-  const queue = ArrayPrototypeFlatMap(matchers, (matcher) => {
-    return ArrayPrototypeMap(matcher.set,
-                             (pattern) => ({ __proto__: null, pattern, index: 0, path: '.', followSymlinks: true }));
-  });
-  const cache = new Cache();
-
-  while (queue.length > 0) {
-    const { pattern, index: currentIndex, path, followSymlinks } = ArrayPrototypePop(queue)!;
-    // if (cache.seen_(pattern, currentIndex, path)) {
-    //   continue;
-    // }
-    // cache.add_(pattern, currentIndex, path);
-
-    const currentPattern = pattern[currentIndex];
-    const index = currentIndex + 1;
-    const isLast = pattern.length === index || (pattern.length === index + 1 && pattern[index] === '');
-
-    if (currentPattern === '') {
-      // Absolute path
-      ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: '/', followSymlinks });
-      continue;
-    }
-
-    if (typeof currentPattern === 'string') {
-      const entryPath = join(path, currentPattern);
-      if (isLast && cache.statSync(resolve(root, entryPath))) {
-        // last path
-        results.add(entryPath);
-      } else if (!isLast) {
-        // Keep traversing, we only check file existence for the last path
-        ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
-      }
-      continue;
-    }
-
-    const fullpath = resolve(root, path);
-    const stat = cache.statSync(fullpath);
-    const isDirectory = stat?.isDirectory() || (followSymlinks !== false && stat?.isSymbolicLink());
-
-    if (isDirectory && isRegExp(currentPattern)) {
-      const entries = cache.readdirSync(fullpath);
-      for (const entry of entries) {
-        const entryPath = join(path, entry.name);
-        // if (cache.seen_(pattern, index, entryPath)) {
-        //   continue;
-        // }
-        const matches = testPattern(currentPattern, entry.name);
-        if (matches && isLast) {
-          results.add(entryPath);
-        } else if (matches) {
-          ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
-        }
-      }
-    }
-
-    if (isDirectory && currentPattern === GLOBSTAR) {
-      const entries = cache.readdirSync(fullpath);
-      for (const entry of entries) {
-        if (entry.name[0] === '.' || (exclude && exclude(entry.name))) {
-          continue;
-        }
-        const entryPath = join(path, entry.name);
-        // if (cache.seen_(pattern, index, entryPath)) {
-        //   continue;
-        // }
-        const isSymbolicLink = entry.isSymbolicLink();
-        const isDirectory = entry.isDirectory();
-        if (isDirectory) {
-          // Push child directory to queue at same pattern index
-          ArrayPrototypePush(queue, {
-            __proto__: null, pattern, index: currentIndex, path: entryPath, followSymlinks: !isSymbolicLink,
-          });
-        }
-
-        if (pattern.length === index || (isSymbolicLink && pattern.length === index + 1 && pattern[index] === '')) {
-          results.add(entryPath);
-        } else if (pattern[index] === '..') {
-          continue;
-        } else if (!isLast &&
-          (isDirectory || (isSymbolicLink && (typeof pattern[index] !== 'string' || pattern[0] !== GLOBSTAR)))) {
-          ArrayPrototypePush(queue, { __proto__: null, pattern, index, path: entryPath, followSymlinks });
-        }
-      }
-      if (isLast) {
-        results.add(path);
-      } else {
-        ArrayPrototypePush(queue, { __proto__: null, pattern, index, path, followSymlinks });
       }
     }
   }
