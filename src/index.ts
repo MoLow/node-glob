@@ -128,10 +128,6 @@ class Pattern {
     }
     return key;
   }
-
-  toString() {
-    return ArrayPrototypeMap(ArrayFrom(this.indexes), x => this.cacheKey(x)).join(',');
-  }
 }
 
 class GlobImpl {
@@ -163,17 +159,26 @@ class GlobImpl {
 
     while (this.#queue.length > 0) {
       const item = ArrayPrototypePop(this.#queue)!;
-      for (const pattern of item.patterns) {
-        // console.log(item.path, `${pattern}`);
-        this.#getSubpatterns(item.path, pattern);
+      for (let i = 0; i < item.patterns.length; i++) {
+        this.#addSubpatterns(item.path, item.patterns[i]);
       }
+      this.#subpatterns.forEach((patterns, path) => ArrayPrototypePush(this.#queue, { __proto__: null, path, patterns }));
+      this.#subpatterns.clear();
     }
     return this.#results;
   }
-  #getSubpatterns( path: string, pattern: Pattern) {
+  #subpatterns = new SafeMap<string, Pattern[]>();
+  #addSubpattern(path: string, pattern: Pattern) {
+    if (!this.#subpatterns.has(path)) {
+      this.#subpatterns.set(path, [pattern]);
+    } else {
+      ArrayPrototypePush(this.#subpatterns.get(path)!, pattern);
+    }
+  }
+  #addSubpatterns(path: string, pattern: Pattern) {
     this.#cache.add(path, pattern);
     const fullpath = resolve(this.#root, path);
-    const stat = this.#cache.statSync(fullpath);
+    const stat = this.#cache.statSync(path);
     const last = pattern.last;
     const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && pattern.hasSeenSymlinks);
     const isLast = pattern.isLast(isDirectory);
@@ -181,17 +186,17 @@ class GlobImpl {
   
     if (isFirst && pattern.at(0) === "") {
       // Absolute path, go to root
-      ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(new SafeSet([1]))] , path: '/' });
+      this.#addSubpattern('/', pattern.child(new SafeSet([1])));
       return;
     }
     if (isFirst && pattern.at(0) === "..") {
       // Start with .., go to parent
-      ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(new SafeSet([1]))] , path: '..' });
+      this.#addSubpattern('../', pattern.child(new SafeSet([1])));
       return;
     }
     if (isFirst && pattern.at(0) === ".") {
       // Start with ., proceed
-      ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(new SafeSet([1]))] , path });
+      this.#addSubpattern('.', pattern.child(new SafeSet([1])));
       return;
     }
   
@@ -223,7 +228,7 @@ class GlobImpl {
       
       const subPatterns = new SafeSet<number>();
       const nSymlinks = new SafeSet<number>();
-      pattern.indexes.forEach((index) => {
+      for (const index of pattern.indexes) {
         // for each child, chek potential patterns
         if (this.#cache.seen(entryPath, pattern, index) || this.#cache.seen(entryPath, pattern, index + 1)) {
           return;
@@ -274,10 +279,10 @@ class GlobImpl {
             const parent = join(path, "..");
             if (nextIndex < last) {
               if (!this.#cache.seen(path, pattern, nextIndex + 1)) {
-                ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(new SafeSet([nextIndex + 1]))] , path });
+                this.#subpatterns.set(path, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
               if (!this.#cache.seen(parent, pattern, nextIndex + 1)) {
-                ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(new SafeSet([nextIndex + 1]))] , path: parent });
+                this.#subpatterns.set(parent, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
             } else {
               this.#results.add(parent);
@@ -312,10 +317,10 @@ class GlobImpl {
             subPatterns.add(nextIndex);
           }
         }
-      });
+      };
       if (subPatterns.size > 0) {
         // if there are potential patterns, add to queue
-        ArrayPrototypePush(this.#queue, {  __proto__: null, patterns: [pattern.child(subPatterns, nSymlinks)] , path: entryPath });
+        this.#addSubpattern(entryPath, pattern.child(subPatterns, nSymlinks));
       }
     }
   }
