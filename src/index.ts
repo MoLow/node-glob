@@ -220,9 +220,6 @@ class GlobImpl {
     const children = this.#cache.readdirSync(fullpath);
     for (let i = 0; i < children.length; i++) {
       const entry = children[i];
-      if (entry.name[0] === '.' || (this.#exclude && this.#exclude(entry.name))) {
-        continue;
-      }
       const entryPath = join(path, entry.name);
       this.#cache.addToStatCache(entryPath, entry);
       
@@ -239,6 +236,9 @@ class GlobImpl {
         const fromSymlink = pattern.symlinks.has(index);
   
         if (current === GLOBSTAR) {
+          if (entry.name[0] === '.' || (this.#exclude && this.#exclude(entry.name))) {
+            continue;
+          }
           if (!fromSymlink && entry.isDirectory()) {
             // if directory, add ** to its potential patterns
             subPatterns.add(index); 
