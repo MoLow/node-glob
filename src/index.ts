@@ -202,10 +202,10 @@ class GlobImpl {
   
     if (isLast && typeof pattern.at(last) === 'string') {
       // Add result if it exists
-      const path = resolve(fullpath, pattern.at(last) as string);
-      const stat = this.#cache.statSync(path);
+      const p = join(path, pattern.at(last) as string);
+      const stat = this.#cache.statSync(p);
       if (stat && (pattern.at(last) || isDirectory)) {
-        this.#results.add(relative(this.#root, path) || ".");
+        this.#results.add(p);
       }
     } else if (isLast && pattern.at(last) === GLOBSTAR && (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
       // if pattern ends with **, add to results
@@ -291,14 +291,10 @@ class GlobImpl {
           }
         }
         if (typeof current === "string") {
-          if (pattern.test(index, entry.name)) {
+          if (pattern.test(index, entry.name) && index !== last) {
             // if current pattern matches entry name
             // the next pattern is a potential pattern
-            if (index === last) {
-              this.#results.add(entryPath);
-            } else {
               subPatterns.add(nextIndex);
-            }
           } else if (current === "." && pattern.test(nextIndex, entry.name)) {
             // if current pattern is ".", proceed to test next pattern
             if (nextIndex === last) {
