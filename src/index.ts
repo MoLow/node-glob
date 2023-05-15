@@ -134,7 +134,7 @@ class GlobImpl {
   #root: string;
   #exclude?: (path: string) => boolean;
   #cache = new Cache();
-  #results = new SafeSet<string>();
+  #results = [] as string[];
   #queue: { __proto__: null, path: string, patterns: Pattern[] }[] = [];
   matchers: Minimatch[];
   constructor(patterns: string[], options: any = kEmptyObject) {
@@ -205,12 +205,12 @@ class GlobImpl {
       const p = join(path, pattern.at(last) as string);
       const stat = this.#cache.statSync(p);
       if (stat && (pattern.at(last) || isDirectory)) {
-        this.#results.add(p);
+        this.#results.push(p);
       }
     } else if (isLast && pattern.at(last) === GLOBSTAR && (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
       // if pattern ends with **, add to results
       // if path is ".", add it only if pattern starts with "." or pattern is exactly "**"
-      this.#results.add(path);
+      this.#results.push(path);
     }
   
     if (!isDirectory) {
@@ -244,7 +244,7 @@ class GlobImpl {
             subPatterns.add(index); 
           } else if (!fromSymlink && index === last) {
             // if ** is last, add to results
-            this.#results.add(entryPath);
+            this.#results.push(entryPath);
           }
           
           // any pattern after ** is also a potential pattern
@@ -252,7 +252,7 @@ class GlobImpl {
           const nextMatches = pattern.test(nextIndex, entry.name);
           if (nextMatches && nextIndex === last) {
             // if next pattern is the last one, add to results
-            this.#results.add(entryPath);
+            this.#results.push(entryPath);
           } else if (nextMatches && entry.isDirectory()) {
             // pattern mached, meaning two patterns forward
             // are also potential patterns
@@ -271,7 +271,7 @@ class GlobImpl {
   
           if (next === "") {
             // this means patten ends with "**/", add to results
-            this.#results.add(path); 
+            this.#results.push(path); 
           } else if (next === ".." && entry.isDirectory()) {
             // in case pattern is "**/..",
             // both parent and current directory should be added to the queue
@@ -285,8 +285,8 @@ class GlobImpl {
                 this.#subpatterns.set(parent, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
             } else {
-              this.#results.add(parent);
-              this.#results.add(path);
+              this.#results.push(parent);
+              this.#results.push(path);
             }
           }
         }
@@ -298,7 +298,7 @@ class GlobImpl {
           } else if (current === "." && pattern.test(nextIndex, entry.name)) {
             // if current pattern is ".", proceed to test next pattern
             if (nextIndex === last) {
-              this.#results.add(entryPath);
+              this.#results.push(entryPath);
             } else {
               subPatterns.add(nextIndex + 1);
             }
@@ -308,7 +308,7 @@ class GlobImpl {
           // if current pattern is a regex that matches entry name (e.g *.js)
           // add next pattern to potential patterns, or to results if it's the last pattern
           if (index === last) {
-            this.#results.add(entryPath);
+            this.#results.push(entryPath);
           } else if (entry.isDirectory()) {
             subPatterns.add(nextIndex);
           }
@@ -323,7 +323,7 @@ class GlobImpl {
 }
 
 export const glob = (pattern: string, opts?: any) => {
-  return ArrayFrom(new GlobImpl([pattern], opts).globSync());
+  return new GlobImpl([pattern], opts).globSync();
 }
 
 // just stuff to makes tests pass
