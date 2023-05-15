@@ -63,7 +63,9 @@ class Cache {
       cache = new SafeSet();
       this.#cache.set(path, cache);
     }
+    const originalSize = cache.size;
     pattern.indexes.forEach(index => cache?.add(pattern.cacheKey(index)));
+    return cache.size !== originalSize + pattern.indexes.size;
   }
   seen(path: string, pattern: Pattern, index: number) {
     return this.#cache.get(path)?.has(pattern.cacheKey(index));
@@ -176,7 +178,10 @@ class GlobImpl {
     }
   }
   #addSubpatterns(path: string, pattern: Pattern) {
-    this.#cache.add(path, pattern);
+    const seen = this.#cache.add(path, pattern);
+    if (seen) {
+      return;
+    }
     const fullpath = resolve(this.#root, path);
     const stat = this.#cache.statSync(fullpath);
     const last = pattern.last;
@@ -206,6 +211,9 @@ class GlobImpl {
       const stat = this.#cache.statSync(join(fullpath, p));
       if (stat && (p || isDirectory)) {
         this.#results.push(join(path, p));
+      }
+      if (pattern.indexes.size === 1 && pattern.indexes.has(last)) {
+        return;
       }
     } else if (isLast && pattern.at(last) === GLOBSTAR && (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
       // if pattern ends with **, add to results
@@ -250,7 +258,7 @@ class GlobImpl {
           // any pattern after ** is also a potential pattern
           // so we can already test it here
           const nextMatches = pattern.test(nextIndex, entry.name);
-          if (nextMatches && nextIndex === last) {
+          if (nextMatches && nextIndex === last && !isLast) {
             // if next pattern is the last one, add to results
             this.#results.push(entryPath);
           } else if (nextMatches && entry.isDirectory()) {
@@ -269,19 +277,16 @@ class GlobImpl {
             nSymlinks.add(index);
           }
   
-          if (next === "") {
-            // this means patten ends with "**/", add to results
-            this.#results.push(path); 
-          } else if (next === ".." && entry.isDirectory()) {
+          if (next === ".." && entry.isDirectory()) {
             // in case pattern is "**/..",
             // both parent and current directory should be added to the queue
             // if this is the last pattern, add to results instead
             const parent = join(path, "..");
             if (nextIndex < last) {
-              if (!this.#cache.seen(path, pattern, nextIndex + 1)) {
+              if (!this.#subpatterns.has(path) && !this.#cache.seen(path, pattern, nextIndex + 1)) {
                 this.#subpatterns.set(path, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
-              if (!this.#cache.seen(parent, pattern, nextIndex + 1)) {
+              if (!this.#subpatterns.has(parent) && !this.#cache.seen(parent, pattern, nextIndex + 1)) {
                 this.#subpatterns.set(parent, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
             } else {
