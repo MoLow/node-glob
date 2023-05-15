@@ -285,8 +285,14 @@ class GlobImpl {
                 this.#subpatterns.set(parent, [pattern.child(new SafeSet([nextIndex + 1]))]);
               }
             } else {
-              this.#results.push(parent);
-              this.#results.push(path);
+              if (!this.#cache.seen(path, pattern, nextIndex)) {
+                this.#cache.add(path, pattern.child(new SafeSet([nextIndex])));
+                this.#results.push(path);
+              } 
+              if (!this.#cache.seen(path, pattern, nextIndex) || !this.#cache.seen(parent, pattern, nextIndex)) {
+                this.#cache.add(parent, pattern.child(new SafeSet([nextIndex])));
+                this.#results.push(parent);
+              }
             }
           }
         }
