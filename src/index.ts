@@ -178,7 +178,7 @@ class GlobImpl {
   #addSubpatterns(path: string, pattern: Pattern) {
     this.#cache.add(path, pattern);
     const fullpath = resolve(this.#root, path);
-    const stat = this.#cache.statSync(path);
+    const stat = this.#cache.statSync(fullpath);
     const last = pattern.last;
     const isDirectory = stat?.isDirectory() || (stat?.isSymbolicLink() && pattern.hasSeenSymlinks);
     const isLast = pattern.isLast(isDirectory);
@@ -202,10 +202,10 @@ class GlobImpl {
   
     if (isLast && typeof pattern.at(last) === 'string') {
       // Add result if it exists
-      const p = join(path, pattern.at(last) as string);
-      const stat = this.#cache.statSync(p);
-      if (stat && (pattern.at(last) || isDirectory)) {
-        this.#results.push(p);
+      const p = pattern.at(last) as string;
+      const stat = this.#cache.statSync(join(fullpath, p));
+      if (stat && (p || isDirectory)) {
+        this.#results.push(join(path, p));
       }
     } else if (isLast && pattern.at(last) === GLOBSTAR && (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
       // if pattern ends with **, add to results
@@ -221,7 +221,7 @@ class GlobImpl {
     for (let i = 0; i < children.length; i++) {
       const entry = children[i];
       const entryPath = join(path, entry.name);
-      this.#cache.addToStatCache(entryPath, entry);
+      this.#cache.addToStatCache(entry.path, entry);
       
       const subPatterns = new SafeSet<number>();
       const nSymlinks = new SafeSet<number>();
