@@ -64,7 +64,7 @@ class Cache {
       this.#cache.set(path, cache);
     }
     const originalSize = cache.size;
-    pattern.indexes.forEach(index => cache?.add(pattern.cacheKey(index)));
+    pattern.indexes.forEach((index) => cache?.add(pattern.cacheKey(index)));
     return cache.size !== originalSize + pattern.indexes.size;
   }
   seen(path: string, pattern: Pattern, index: number) {
@@ -89,7 +89,8 @@ class Pattern {
 
   isLast(isDirectory: boolean) {
     return this.indexes.has(this.last) ||
-      (this.#pattern[this.last] === '' && isDirectory && this.indexes.has(this.last - 1) && this.#pattern[this.last - 1] === lazyMinimatch().GLOBSTAR);
+      (this.#pattern[this.last] === '' && isDirectory &&
+      this.indexes.has(this.last - 1) && this.#pattern[this.last - 1] === lazyMinimatch().GLOBSTAR);
   }
   isFirst() {
     return this.indexes.has(0);
@@ -147,16 +148,20 @@ class GlobImpl {
     }
     this.#root = cwd ?? '.';
     this.#exclude = exclude;
-    this.matchers = ArrayPrototypeMap(patterns, (pattern) => new Minimatch(pattern));
+    this.matchers = ArrayPrototypeMap(patterns, (pattern) => new (lazyMinimatch().Minimatch)(pattern));
   }
 
   globSync() {
     ArrayPrototypePush(this.#queue, {
       __proto__: null,
       path: '.',
-      patterns: ArrayPrototypeFlatMap(this.matchers, (matcher) => ArrayPrototypeMap(matcher.set, (pattern, i) => new Pattern(
-        pattern, matcher.globParts[i], new SafeSet([0]), new SafeSet<number>()
-      ))),
+      patterns: ArrayPrototypeFlatMap(this.matchers, (matcher) => ArrayPrototypeMap(matcher.set,
+                                                                                    (pattern, i) => new Pattern(
+                                                                                      pattern,
+                                                                                      matcher.globParts[i],
+                                                                                      new SafeSet([0]),
+                                                                                      new SafeSet(),
+                                                                                    ))),
     });
 
     while (this.#queue.length > 0) {
@@ -164,7 +169,8 @@ class GlobImpl {
       for (let i = 0; i < item.patterns.length; i++) {
         this.#addSubpatterns(item.path, item.patterns[i]);
       }
-      this.#subpatterns.forEach((patterns, path) => ArrayPrototypePush(this.#queue, { __proto__: null, path, patterns }));
+      this.#subpatterns
+        .forEach((patterns, path) => ArrayPrototypePush(this.#queue, { __proto__: null, path, patterns }));
       this.#subpatterns.clear();
     }
     return this.#results;
@@ -215,9 +221,10 @@ class GlobImpl {
       if (pattern.indexes.size === 1 && pattern.indexes.has(last)) {
         return;
       }
-    } else if (isLast && pattern.at(last) === GLOBSTAR && (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
-      // if pattern ends with **, add to results
-      // if path is ".", add it only if pattern starts with "." or pattern is exactly "**"
+    } else if (isLast && pattern.at(last) === lazyMinimatch().GLOBSTAR &&
+      (path !== "." || pattern.at(0) === "." || (last === 0 && stat))) {
+      // If pattern ends with **, add to results
+      // If path is ".", add it only if pattern starts with "." or pattern is exactly "**"
       this.#results.push(path);
     }
   
@@ -229,12 +236,12 @@ class GlobImpl {
     for (let i = 0; i < children.length; i++) {
       const entry = children[i];
       const entryPath = join(path, entry.name);
-      this.#cache.addToStatCache(entry.path, entry);
+      this.#cache.addToStatCache(join(fullpath, entry.name), entry);
       
       const subPatterns = new SafeSet<number>();
       const nSymlinks = new SafeSet<number>();
       for (const index of pattern.indexes) {
-        // for each child, chek potential patterns
+        // For each child, chek potential patterns
         if (this.#cache.seen(entryPath, pattern, index) || this.#cache.seen(entryPath, pattern, index + 1)) {
           return;
         }
@@ -243,32 +250,33 @@ class GlobImpl {
         const next = pattern.at(nextIndex);
         const fromSymlink = pattern.symlinks.has(index);
   
-        if (current === GLOBSTAR) {
+        if (current === lazyMinimatch().GLOBSTAR) {
           if (entry.name[0] === '.' || (this.#exclude && this.#exclude(entry.name))) {
             continue;
           }
           if (!fromSymlink && entry.isDirectory()) {
-            // if directory, add ** to its potential patterns
+            // If directory, add ** to its potential patterns
             subPatterns.add(index); 
           } else if (!fromSymlink && index === last) {
-            // if ** is last, add to results
+            // If ** is last, add to results
             this.#results.push(entryPath);
           }
           
-          // any pattern after ** is also a potential pattern
+          // Any pattern after ** is also a potential pattern
           // so we can already test it here
           const nextMatches = pattern.test(nextIndex, entry.name);
           if (nextMatches && nextIndex === last && !isLast) {
-            // if next pattern is the last one, add to results
+            // If next pattern is the last one, add to results
             this.#results.push(entryPath);
           } else if (nextMatches && entry.isDirectory()) {
-            // pattern mached, meaning two patterns forward
+            // Pattern mached, meaning two patterns forward
             // are also potential patterns
             // e.g **/b/c when entry is a/b - add c to potential patterns
             subPatterns.add(index + 2);
           }
-          if ((nextMatches || pattern.at(0) === ".") && (entry.isDirectory() || entry.isSymbolicLink()) && !fromSymlink) {
-            // if pattern after ** matches, or pattern starts with "."
+          if ((nextMatches || pattern.at(0) === ".") &&
+           (entry.isDirectory() || entry.isSymbolicLink()) && !fromSymlink) {
+            // If pattern after ** matches, or pattern starts with "."
             // and entry is a directory or symlink, add to potential patterns
             subPatterns.add(nextIndex);
           }
@@ -278,7 +286,7 @@ class GlobImpl {
           }
   
           if (next === ".." && entry.isDirectory()) {
-            // in case pattern is "**/..",
+            // In case pattern is "**/..",
             // both parent and current directory should be added to the queue
             // if this is the last pattern, add to results instead
             const parent = join(path, "..");
@@ -303,11 +311,11 @@ class GlobImpl {
         }
         if (typeof current === "string") {
           if (pattern.test(index, entry.name) && index !== last) {
-            // if current pattern matches entry name
+            // If current pattern matches entry name
             // the next pattern is a potential pattern
-              subPatterns.add(nextIndex);
+            subPatterns.add(nextIndex);
           } else if (current === "." && pattern.test(nextIndex, entry.name)) {
-            // if current pattern is ".", proceed to test next pattern
+            // If current pattern is ".", proceed to test next pattern
             if (nextIndex === last) {
               this.#results.push(entryPath);
             } else {
@@ -315,7 +323,7 @@ class GlobImpl {
             }
           }
         }
-        if (isRegExp(current) && pattern.test(index, entry.name)) {
+        if (current instanceof RegExp && pattern.test(index, entry.name)) {
           // if current pattern is a regex that matches entry name (e.g *.js)
           // add next pattern to potential patterns, or to results if it's the last pattern
           if (index === last) {
@@ -324,9 +332,9 @@ class GlobImpl {
             subPatterns.add(nextIndex);
           }
         }
-      };
+      }
       if (subPatterns.size > 0) {
-        // if there are potential patterns, add to queue
+        // If there are potential patterns, add to queue
         this.#addSubpattern(entryPath, pattern.child(subPatterns, nSymlinks));
       }
     }
