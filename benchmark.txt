@@ -1,0 +1,288 @@
+
+--- pattern: '**' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.647s  222999
+node glob10 glob syncStream  	0m1.506s  222999
+node current globSync mjs    	0m1.649s  222999
+node current glob syncStream  	0m1.524s  222999
+~~ async ~~
+node glob10 glob async mjs   	0m0.574s  222999
+node glob10 glob stream      	0m0.527s  222999
+node current glob async mjs   	0m0.590s  222999
+node current glob stream      	0m0.535s  222999
+
+--- pattern: '**/..' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.292s  2268
+node glob10 glob syncStream  	0m1.312s  2268
+node current globSync mjs    	0m1.428s  2268
+node current glob syncStream  	0m1.324s  2268
+~~ async ~~
+node glob10 glob async mjs   	0m0.550s  2268
+node glob10 glob stream      	0m0.513s  2268
+node current glob async mjs   	0m0.549s  2268
+node current glob stream      	0m0.542s  2268
+
+--- pattern: './**/0/**/0/**/0/**/0/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.311s  10
+node glob10 glob syncStream  	0m1.274s  10
+node current globSync mjs    	0m1.282s  10
+node current glob syncStream  	0m1.395s  10
+~~ async ~~
+node glob10 glob async mjs   	0m0.538s  10
+node glob10 glob stream      	0m0.517s  10
+node current glob async mjs   	0m0.529s  10
+node current glob stream      	0m0.520s  10
+
+--- pattern: './**/[01]/**/[12]/**/[23]/**/[45]/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.293s  160
+node glob10 glob syncStream  	0m1.293s  160
+node current globSync mjs    	0m1.325s  160
+node current glob syncStream  	0m1.296s  160
+~~ async ~~
+node glob10 glob async mjs   	0m0.516s  160
+node glob10 glob stream      	0m0.522s  160
+node current glob async mjs   	0m0.528s  160
+node current glob stream      	0m0.588s  160
+
+--- pattern: './**/0/**/0/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.338s  5230
+node glob10 glob syncStream  	0m1.294s  5230
+node current globSync mjs    	0m1.381s  5230
+node current glob syncStream  	0m1.324s  5230
+~~ async ~~
+node glob10 glob async mjs   	0m0.513s  5230
+node glob10 glob stream      	0m0.521s  5230
+node current glob async mjs   	0m0.519s  5230
+node current glob stream      	0m0.527s  5230
+
+--- pattern: '**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.414s  200003
+node glob10 glob syncStream  	0m1.406s  200003
+node current globSync mjs    	0m1.497s  200003
+node current glob syncStream  	0m1.452s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.559s  200003
+node glob10 glob stream      	0m0.542s  200003
+node current glob async mjs   	0m0.592s  200003
+node current glob stream      	0m0.578s  200003
+
+--- pattern: '{**/*.txt,**/?/**/*.txt,**/?/**/?/**/*.txt,**/?/**/?/**/?/**/*.txt,**/?/**/?/**/?/**/?/**/*.txt}' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.532s  200003
+node glob10 glob syncStream  	0m1.428s  200003
+node current globSync mjs    	0m1.560s  200003
+node current glob syncStream  	0m1.462s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.576s  200003
+node glob10 glob stream      	0m0.611s  200003
+node current glob async mjs   	0m0.620s  200003
+node current glob stream      	0m0.595s  200003
+
+--- pattern: '**/5555/0000/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.336s  1000
+node glob10 glob syncStream  	0m1.285s  1000
+node current globSync mjs    	0m1.293s  1000
+node current glob syncStream  	0m1.300s  1000
+~~ async ~~
+node glob10 glob async mjs   	0m0.517s  1000
+node glob10 glob stream      	0m0.566s  1000
+node current glob async mjs   	0m0.545s  1000
+node current glob stream      	0m0.548s  1000
+
+--- pattern: './**/0/**/../[01]/**/0/../**/0/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.280s  4880
+node glob10 glob syncStream  	0m1.302s  4880
+node current globSync mjs    	0m1.330s  4880
+node current glob syncStream  	0m1.318s  4880
+~~ async ~~
+node glob10 glob async mjs   	0m0.545s  4880
+node glob10 glob stream      	0m0.534s  4880
+node current glob async mjs   	0m0.537s  4880
+node current glob stream      	0m0.526s  4880
+
+--- pattern: '**/????/????/????/????/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.412s  100000
+node glob10 glob syncStream  	0m1.330s  100000
+node current globSync mjs    	0m1.375s  100000
+node current glob syncStream  	0m1.346s  100000
+~~ async ~~
+node glob10 glob async mjs   	0m0.551s  100000
+node glob10 glob stream      	0m0.541s  100000
+node current glob async mjs   	0m0.522s  100000
+node current glob stream      	0m0.545s  100000
+
+--- pattern: './{**/?{/**/?{/**/?{/**/?,,,,},,,,},,,,},,,}/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.525s  200003
+node glob10 glob syncStream  	0m1.470s  200003
+node current globSync mjs    	0m1.542s  200003
+node current glob syncStream  	0m1.436s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.578s  200003
+node glob10 glob stream      	0m0.544s  200003
+node current glob async mjs   	0m0.631s  200003
+node current glob stream      	0m0.572s  200003
+
+--- pattern: '**/!(0|9).txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.405s  180003
+node glob10 glob syncStream  	0m1.396s  180003
+node current globSync mjs    	0m1.472s  180003
+node current glob syncStream  	0m1.398s  180003
+~~ async ~~
+node glob10 glob async mjs   	0m0.530s  180003
+node glob10 glob stream      	0m0.535s  180003
+node current glob async mjs   	0m0.580s  180003
+node current glob stream      	0m0.538s  180003
+
+--- pattern: './{*/**/../{*/**/../{*/**/../{*/**/../{*/**,,,,},,,,},,,,},,,,},,,,}/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.560s  200003
+node glob10 glob syncStream  	0m1.541s  200003
+node current globSync mjs    	0m1.627s  200003
+node current glob syncStream  	0m1.553s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.739s  200003
+node glob10 glob stream      	0m0.642s  200003
+node current glob async mjs   	0m0.751s  200003
+node current glob stream      	0m0.686s  200003
+
+--- pattern: './*/**/../*/**/../*/**/../*/**/../*/**/../*/**/../*/**/../*/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.532s  200003
+node glob10 glob syncStream  	0m1.493s  200003
+node current globSync mjs    	0m1.574s  200003
+node current glob syncStream  	0m1.483s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.619s  200003
+node glob10 glob stream      	0m0.585s  200003
+node current glob async mjs   	0m0.679s  200003
+node current glob stream      	0m0.565s  200003
+
+--- pattern: './*/**/../*/**/../*/**/../*/**/../*/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.477s  200003
+node glob10 glob syncStream  	0m1.432s  200003
+node current globSync mjs    	0m1.553s  200003
+node current glob syncStream  	0m1.440s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.571s  200003
+node glob10 glob stream      	0m0.527s  200003
+node current glob async mjs   	0m0.637s  200003
+node current glob stream      	0m0.535s  200003
+
+--- pattern: './0/**/../1/**/../2/**/../3/**/../4/**/../5/**/../6/**/../7/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m0.063s  0
+node glob10 glob syncStream  	0m0.062s  0
+node current globSync mjs    	0m0.073s  0
+node current glob syncStream  	0m0.114s  0
+~~ async ~~
+node glob10 glob async mjs   	0m0.065s  0
+node glob10 glob stream      	0m0.070s  0
+node current glob async mjs   	0m0.076s  0
+node current glob stream      	0m0.082s  0
+
+--- pattern: './**/?/**/?/**/?/**/?/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.388s  100000
+node glob10 glob syncStream  	0m1.343s  100000
+node current globSync mjs    	0m1.424s  100000
+node current glob syncStream  	0m1.379s  100000
+~~ async ~~
+node glob10 glob async mjs   	0m0.518s  100000
+node glob10 glob stream      	0m0.549s  100000
+node current glob async mjs   	0m0.537s  100000
+node current glob stream      	0m0.525s  100000
+
+--- pattern: '**/*/**/*/**/*/**/*/**' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.501s  222380
+node glob10 glob syncStream  	0m1.443s  222380
+node current globSync mjs    	0m1.522s  222380
+node current glob syncStream  	0m1.447s  222380
+~~ async ~~
+node glob10 glob async mjs   	0m0.591s  222380
+node glob10 glob stream      	0m0.553s  222380
+node current glob async mjs   	0m0.644s  222380
+node current glob stream      	0m0.561s  222380
+
+--- pattern: './**/*/**/*/**/*/**/*/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.478s  200000
+node glob10 glob syncStream  	0m1.452s  200000
+node current globSync mjs    	0m1.556s  200000
+node current glob syncStream  	0m1.430s  200000
+~~ async ~~
+node glob10 glob async mjs   	0m0.574s  200000
+node glob10 glob stream      	0m0.521s  200000
+node current glob async mjs   	0m0.590s  200000
+node current glob stream      	0m0.529s  200000
+
+--- pattern: '**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.447s  200003
+node glob10 glob syncStream  	0m1.364s  200003
+node current globSync mjs    	0m1.478s  200003
+node current glob syncStream  	0m1.440s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.543s  200003
+node glob10 glob stream      	0m0.532s  200003
+node current glob async mjs   	0m0.571s  200003
+node current glob stream      	0m0.535s  200003
+
+--- pattern: './**/**/**/**/**/**/**/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.420s  200003
+node glob10 glob syncStream  	0m1.408s  200003
+node current globSync mjs    	0m1.511s  200003
+node current glob syncStream  	0m1.390s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.598s  200003
+node glob10 glob stream      	0m0.534s  200003
+node current glob async mjs   	0m0.579s  200003
+node current glob stream      	0m0.527s  200003
+
+--- pattern: '**/*/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.441s  200003
+node glob10 glob syncStream  	0m1.378s  200003
+node current globSync mjs    	0m1.523s  200003
+node current glob syncStream  	0m1.393s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.584s  200003
+node glob10 glob stream      	0m0.527s  200003
+node current glob async mjs   	0m0.611s  200003
+node current glob stream      	0m0.528s  200003
+
+--- pattern: '**/*/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.473s  200003
+node glob10 glob syncStream  	0m1.392s  200003
+node current globSync mjs    	0m1.490s  200003
+node current glob syncStream  	0m1.411s  200003
+~~ async ~~
+node glob10 glob async mjs   	0m0.578s  200003
+node glob10 glob stream      	0m0.532s  200003
+node current glob async mjs   	0m0.622s  200003
+node current glob stream      	0m0.525s  200003
+
+--- pattern: '**/[0-9]/**/*.txt' ---
+~~ sync ~~
+node glob10 globSync mjs    	0m1.365s  100000
+node glob10 glob syncStream  	0m1.353s  100000
+node current globSync mjs    	0m1.434s  100000
+node current glob syncStream  	0m1.397s  100000
+~~ async ~~
+node glob10 glob async mjs   	0m0.535s  100000
+node glob10 glob stream      	0m0.529s  100000
+node current glob async mjs   	0m0.533s  100000
+node current glob stream      	0m0.558s  100000
